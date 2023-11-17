@@ -77,41 +77,41 @@ def normalize(vector):
     return vector / norm
 
 def ellipsoid_intersect(center, scaling, ray_origin, ray_direction):
-    # Normalize the ray direction
-    # norm_ray_dir = normalize(ray_direction)
-
-    # Adjust ray origin and direction according to the ellipsoid's center and scaling
-    adjusted_origin = (ray_origin - center) / scaling
-    adjusted_direction = ray_direction / scaling
-
-    # The ellipsoid equation coefficients
-    A = np.dot(adjusted_direction, adjusted_direction)
-    B = 2 * np.dot(adjusted_origin, adjusted_direction)
-    C = np.dot(adjusted_origin, adjusted_origin) - 1
-
-
-    # # inverse T matrix method
     # # Normalize the ray direction
-    # norm_ray_dir = normalize(ray_direction)
+    # # norm_ray_dir = normalize(ray_direction)
 
-    # # Inverse scaling matrix for non-uniform scaling
-    # inv_scaling_matrix = np.diag([1/s if s != 0 else 1 for s in scaling] + [1])
+    # # Adjust ray origin and direction according to the ellipsoid's center and scaling
+    # adjusted_origin = (ray_origin - center) / scaling
+    # adjusted_direction = ray_direction / scaling
 
-    # # Transformation matrix for moving the ellipsoid center to the origin
-    # translation_matrix = np.identity(4)
-    # translation_matrix[:3, 3] = -np.array(center)
+    # # The ellipsoid equation coefficients
+    # A = np.dot(adjusted_direction, adjusted_direction)
+    # B = 2 * np.dot(adjusted_origin, adjusted_direction)
+    # C = np.dot(adjusted_origin, adjusted_origin) - 1
 
-    # # Combined inverse transformation matrix
-    # inv_transform = np.dot(inv_scaling_matrix, translation_matrix)
 
-    # # Transform the ray into the object space
-    # transformed_ray_origin = np.dot(inv_transform, np.append(ray_origin, 1))[:3]
-    # transformed_ray_direction = np.dot(inv_transform, np.append(norm_ray_dir, 0))[:3]
+    # inverse T matrix method
+    # Normalize the ray direction
+    norm_ray_dir = normalize(ray_direction)
 
-    # # Perform intersection test with the unit sphere in the transformed space
-    # A = np.dot(transformed_ray_direction, transformed_ray_direction)
-    # B = 2 * np.dot(transformed_ray_direction, transformed_ray_origin)
-    # C = np.dot(transformed_ray_origin, transformed_ray_origin) - 1
+    # Inverse scaling matrix for non-uniform scaling
+    inv_scaling_matrix = np.diag([1/s if s != 0 else 1 for s in scaling] + [1])
+
+    # Transformation matrix for moving the ellipsoid center to the origin
+    translation_matrix = np.identity(4)
+    translation_matrix[:3, 3] = -np.array(center)
+
+    # Combined inverse transformation matrix
+    inv_transform = np.dot(inv_scaling_matrix, translation_matrix)
+
+    # Transform the ray into the object space
+    transformed_ray_origin = np.dot(inv_transform, np.append(ray_origin, 1))[:3]
+    transformed_ray_direction = np.dot(inv_transform, np.append(norm_ray_dir, 0))[:3]
+
+    # Perform intersection test with the unit sphere in the transformed space
+    A = np.dot(transformed_ray_direction, transformed_ray_direction)
+    B = 2 * np.dot(transformed_ray_direction, transformed_ray_origin)
+    C = np.dot(transformed_ray_origin, transformed_ray_origin) - 1
 
 
     # Solving the quadratic equation for t
@@ -185,6 +185,7 @@ def main():
     screen = (scene["left"], scene["top"] / ratio, scene["right"], scene["bottom"] / ratio)
 
     image = np.zeros((int(height), int(width), 3))
+    print(scene["spheres"][0]["ks"])
     for i, y in enumerate(np.linspace(screen[1], screen[3], int(height))):
         for j, x in enumerate(np.linspace(screen[0], screen[2], int(width))):
             # image[i, j] = ...
@@ -217,20 +218,28 @@ def main():
                 break
 
             # RGB
-            illumination = nearest_object["color"]
+            illumination = np.array(nearest_object["color"]) * np.array(scene["ambient_intensity"]) * nearest_object["ka"]
 
-            # ambient
-            illumination += nearest_object["ka"] * np.array(scene["ambient_intensity"])
-
+            # # ambient
+            # illumination += nearest_object["ka"] * np.array(scene["ambient_intensity"])
+            # illumination *= np.array(scene["ambient_intensity"])
+   
             # diffuse
-            illumination += nearest_object["kd"] * np.array(scene["lights"][0]["intensity"]) * np.dot(intersection_to_light, normal_to_surface)
-            # illumination += nearest_object["kd"] * np.dot(intersection_to_light, normal_to_surface)
+            # illumination += nearest_object["kd"] * np.array(scene["lights"][0]["intensity"]) * np.dot(intersection_to_light, normal_to_surface)
+            illumination += nearest_object["kd"] * np.dot(intersection_to_light, normal_to_surface)
+            # illumination += nearest_object["kd"] * normalize(np.dot(intersection_to_light, normal_to_surface))
 
             # specular
             intersection_to_camera = normalize(camera - intersection)
             H = normalize(intersection_to_light + intersection_to_camera)
             # illumination += nearest_object["ks"] * light['specular'] * np.dot(normal_to_surface, H) ** (nearest_object['shininess'] / 4)
-            illumination += nearest_object["ks"] * 1 * np.dot(normal_to_surface, H) ** (nearest_object["n"] / 4)
+            # breakpoint()
+            test = np.dot(normal_to_surface, H)
+            if nearest_object["ks"] == 0.0:
+                pass
+            else:
+                illumination += nearest_object["ks"] * 1 * test ** (nearest_object["n"] / 4)
+            # breakpoint()
 
             image[i, j] = np.clip(illumination, 0, 1)
 
