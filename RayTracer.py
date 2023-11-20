@@ -225,20 +225,20 @@ def main():
             # illumination *= np.array(scene["ambient_intensity"])
    
             # diffuse
-            # illumination += nearest_object["kd"] * np.array(scene["lights"][0]["intensity"]) * np.dot(intersection_to_light, normal_to_surface)
-            illumination += nearest_object["kd"] * np.dot(intersection_to_light, normal_to_surface)
+            illumination += nearest_object["kd"] * np.array(scene["lights"][0]["intensity"]) * np.dot(intersection_to_light, normal_to_surface) * np.array(nearest_object["color"])
+            # illumination += nearest_object["kd"] * np.dot(intersection_to_light, normal_to_surface)
             # illumination += nearest_object["kd"] * normalize(np.dot(intersection_to_light, normal_to_surface))
 
             # specular
             intersection_to_camera = normalize(camera - intersection)
             H = normalize(intersection_to_light + intersection_to_camera)
-            # illumination += nearest_object["ks"] * light['specular'] * np.dot(normal_to_surface, H) ** (nearest_object['shininess'] / 4)
+            # illumination += nearest_object["ks"] * np.array(scene["lights"][0]["intensity"]) * np.dot(normal_to_surface, H) ** (nearest_object['shininess'])
             # breakpoint()
             test = np.dot(normal_to_surface, H)
             if nearest_object["ks"] == 0.0:
                 pass
             else:
-                illumination += nearest_object["ks"] * 1 * test ** (nearest_object["n"] / 4)
+                illumination += nearest_object["ks"] * np.array(scene["lights"][0]["intensity"]) * test ** (nearest_object["n"])
             # breakpoint()
 
             image[i, j] = np.clip(illumination, 0, 1)
