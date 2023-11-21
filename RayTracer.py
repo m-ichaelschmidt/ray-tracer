@@ -153,7 +153,8 @@ def find_intersection(sphere, ray_origin, ray_direction):
 
 
 def nearest_intersected_object(spheres, ray_origin, ray_direction):
-    distances = [find_intersection(sphr, ray_origin, ray_direction) for sphr in spheres]
+    # distances = [find_intersection(sphr, ray_origin, ray_direction) for sphr in spheres]
+    distances = [ellipsoid_intersect(sphr["position"], sphr["scaling"], ray_origin, ray_direction) for sphr in spheres]
     nearest_object = None
     min_distance = np.inf
     for index, distance in enumerate(distances):
@@ -161,6 +162,38 @@ def nearest_intersected_object(spheres, ray_origin, ray_direction):
             min_distance = distance
             nearest_object = spheres[index]
     return nearest_object, min_distance
+
+# def calculate_normal_at_intersection(sphere, intersection_point):
+#     # Calculate normal for a sphere (or an unscaled ellipsoid)
+#     unscaled_normal = normalize(intersection_point - sphere["position"])
+
+#     # Create the scaling matrix for the ellipsoid
+#     scaling_matrix = np.diag(list(sphere["scaling"]) + [1])
+#     # inv_transpose_scaling = np.diag([1/s if s != 0 else 1 for s in sphere["scaling"]] + [1])
+
+#     # Calculate the inverse transpose of the scaling matrix
+#     inv_transpose_scaling = np.linalg.inv(scaling_matrix).T
+
+#     # Transform the normal using the inverse transpose of the scaling matrix
+#     transformed_normal = normalize(np.dot(inv_transpose_scaling, np.append(unscaled_normal, 0))[:3])
+
+#     return transformed_normal
+
+def calculate_normal_at_intersection(sphere, intersection_point):
+    # Calculate the normal for the intersection point as if the ellipsoid were a unit sphere at the origin
+    # This involves first translating the intersection point by the negative of the sphere's position
+    translated_intersection = intersection_point - np.array(sphere["position"])
+
+    # Then apply the inverse scaling to this point
+    # Since normals are direction vectors, we don't translate them, only scale
+    inv_scaling_matrix = np.diag([1/s if s != 0 else 1 for s in sphere["scaling"]])
+    unscaled_normal = normalize(np.dot(inv_scaling_matrix, translated_intersection))
+
+    # Transform the normal back to the world space
+    # For normals, we use the transpose of the inverse scaling matrix
+    transformed_normal = normalize(np.dot(inv_scaling_matrix.T, unscaled_normal))
+
+    return transformed_normal
 
 
 def main():
@@ -185,11 +218,11 @@ def main():
     screen = (scene["left"], scene["top"] / ratio, scene["right"], scene["bottom"] / ratio)
 
     image = np.zeros((int(height), int(width), 3))
-    print(scene["spheres"][0]["ks"])
+    # print(scene["spheres"][0]["ks"])
     for i, y in enumerate(np.linspace(screen[1], screen[3], int(height))):
         for j, x in enumerate(np.linspace(screen[0], screen[2], int(width))):
             # image[i, j] = ...
-            print("progress: %d/%d" % (i + 1, int(height)))
+            # print("progress: %d/%d" % (i + 1, int(height)))
 
             pixel = np.array([x, y, -scene["near"]])
             origin = camera
@@ -203,7 +236,7 @@ def main():
 
             # compute intersection point between ray and nearest object
             intersection = origin + min_distance * direction
-            normal_to_surface = normalize(intersection - nearest_object["position"])
+            normal_to_surface = calculate_normal_at_intersection(nearest_object, intersection)
             shifted_point = intersection + 1e-7 * normal_to_surface
             intersection_to_light = normalize(scene["lights"][0]["position"] - shifted_point)
 
@@ -215,9 +248,11 @@ def main():
             #     continue
 
             if is_shadowed:
-                break
+                illumination = np.array(nearest_object["color"]) * np.array(scene["ambient_intensity"]) * nearest_object["ka"]
+                image[i, j] = np.clip(illumination, 0, 1)
+                continue
 
-            # RGB
+            # RGB + ambient?
             illumination = np.array(nearest_object["color"]) * np.array(scene["ambient_intensity"]) * nearest_object["ka"]
 
             # # ambient
@@ -235,15 +270,13 @@ def main():
             # illumination += nearest_object["ks"] * np.array(scene["lights"][0]["intensity"]) * np.dot(normal_to_surface, H) ** (nearest_object['shininess'])
             # breakpoint()
             test = np.dot(normal_to_surface, H)
-            if nearest_object["ks"] == 0.0:
-                pass
-            else:
-                illumination += nearest_object["ks"] * np.array(scene["lights"][0]["intensity"]) * test ** (nearest_object["n"])
+            if not nearest_object["ks"] == 0.0:
+                illumination += nearest_object["ks"] * np.array(scene["lights"][0]["intensity"]) * test ** (nearest_object["n"] * 4)
             # breakpoint()
 
             image[i, j] = np.clip(illumination, 0, 1)
 
-            print("progress: %d/%d" % (i + 1, int(height)))
+            # print("progress: %d/%d" % (i + 1, int(height)))
 
     plt.imsave('RECENT.png', image)
     plt.imsave(scene["output_file_name"], image)
