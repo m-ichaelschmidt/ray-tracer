@@ -171,6 +171,8 @@ def trace_ray(ray_origin, ray_direction, spheres, lights, ambient_intensity, bac
     # Start with ambient lighting
     illumination = np.array(nearest_object["color"]) * np.array(ambient_intensity) * nearest_object["ka"]
 
+    bisected_by_near_plane = (nearest_object["position"][2] - nearest_object["scaling"][2] < -1 and nearest_object["position"][2] + nearest_object["scaling"][2] > -1)
+
     # Add diffuse and specular components for each light source
     for light in lights:
         intersection_to_light = normalize(light["position"] - shifted_point)
@@ -185,6 +187,9 @@ def trace_ray(ray_origin, ray_direction, spheres, lights, ambient_intensity, bac
         _, min_distance = nearest_intersected_object(spheres, shifted_point, intersection_to_light)
         intersection_to_light_distance = np.linalg.norm(light["position"] - intersection)
         is_shadowed = min_distance < intersection_to_light_distance
+
+        if bisected_by_near_plane and not lightInSphere:
+            is_shadowed = True
 
         if is_shadowed:
             # return np.clip(illumination, 0, 1)
