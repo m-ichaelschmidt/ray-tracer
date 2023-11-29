@@ -79,6 +79,19 @@ def normalize(vector):
     return vector / norm
 
 def ellipsoid_intersect(center, scaling, ray_origin, ray_direction):
+    # # Normalize the ray direction
+    # # norm_ray_dir = normalize(ray_direction)
+
+    # # Adjust ray origin and direction according to the ellipsoid's center and scaling
+    # adjusted_origin = (ray_origin - center) / scaling
+    # adjusted_direction = ray_direction / scaling
+
+    # # The ellipsoid equation coefficients
+    # A = np.dot(adjusted_direction, adjusted_direction)
+    # B = 2 * np.dot(adjusted_origin, adjusted_direction)
+    # C = np.dot(adjusted_origin, adjusted_origin) - 1
+
+
     # inverse T matrix method
     # Normalize the ray direction
     norm_ray_dir = normalize(ray_direction)
@@ -112,6 +125,16 @@ def ellipsoid_intersect(center, scaling, ray_origin, ray_direction):
     t1 = (-B + sqrt_delta) / (2 * A)
     t2 = (-B - sqrt_delta) / (2 * A)
 
+    # Find the smallest positive t value
+    # if t1 > 0 and t2 > 0:
+    #     return min(t1, t2)
+    # elif t1 > 0:
+    #     return t1
+    # elif t2 > 0:
+    #     return t2
+
+    # return None
+
     # Check if intersections are behind the near plane
     valid_t1 = t1 > 0 and (ray_origin + t1 * norm_ray_dir)[2] < -1
     valid_t2 = t2 > 0 and (ray_origin + t2 * norm_ray_dir)[2] < -1
@@ -125,6 +148,24 @@ def ellipsoid_intersect(center, scaling, ray_origin, ray_direction):
         return t2
 
     return None
+
+
+# from medium article
+def sphere_intersect(center, radius, ray_origin, ray_direction):
+    b = 2 * np.dot(ray_direction, ray_origin - center)
+    c = np.linalg.norm(ray_origin - center) ** 2 - radius ** 2
+    delta = b ** 2 - 4 * c
+    if delta > 0:
+        t1 = (-b + np.sqrt(delta)) / 2
+        t2 = (-b - np.sqrt(delta)) / 2
+        if t1 > 0 and t2 > 0:
+            return min(t1, t2)
+    return None
+
+def find_intersection(sphere, ray_origin, ray_direction):
+    scaling = sphere["scaling"]
+    center = sphere["position"]
+    return ellipsoid_intersect(center, scaling, ray_origin, ray_direction)
 
 def nearest_intersected_object(spheres, ray_origin, ray_direction):
     # distances = [find_intersection(sphr, ray_origin, ray_direction) for sphr in spheres]
@@ -180,7 +221,6 @@ def trace_ray(ray_origin, ray_direction, spheres, lights, ambient_intensity, bac
         if np.dot(intersection_to_light, normal_to_surface) < 0:
             lightInSphere = True
             normal_to_surface = -normal_to_surface  # Invert normal
-            shifted_point = intersection + 1e-7 * normal_to_surface
 
         _, min_distance = nearest_intersected_object(spheres, shifted_point, intersection_to_light)
         intersection_to_light_distance = np.linalg.norm(light["position"] - intersection)
@@ -189,13 +229,19 @@ def trace_ray(ray_origin, ray_direction, spheres, lights, ambient_intensity, bac
         if is_shadowed:
             # return np.clip(illumination, 0, 1)
             if lightInSphere:
-                # lightInSphere = False
+                lightInSphere = False
                 normal_to_surface = -normal_to_surface
-                shifted_point = intersection + 1e-7 * normal_to_surface
             continue
 
         # diffuse
         illumination += nearest_object["kd"] * np.array(light["intensity"]) * np.dot(intersection_to_light, normal_to_surface) * np.array(nearest_object["color"])
+
+        # specular
+        # if nearest_object["ks"] > 0:
+        #     intersection_to_camera = normalize(camera - intersection)
+        #     H = normalize(intersection_to_light + intersection_to_camera)
+        #     test = np.dot(normal_to_surface, H)
+        #     illumination += nearest_object["ks"] * np.array(light["intensity"]) * test ** (nearest_object["n"] * 4)
 
         # specular - Phong lighting model
         if nearest_object["ks"] > 0:
@@ -209,7 +255,6 @@ def trace_ray(ray_origin, ray_direction, spheres, lights, ambient_intensity, bac
         if lightInSphere:
             lightInSphere = False
             normal_to_surface = -normal_to_surface
-            shifted_point = intersection + 1e-7 * normal_to_surface
 
     # Handle reflections
     if nearest_object["kr"] > 0:
@@ -245,7 +290,6 @@ def main():
     camera = np.array([0, 0, 0])
     ratio = float(width) / height
     screen = (scene["left"], scene["top"] / ratio, scene["right"], scene["bottom"] / ratio)
-    
 
     image = np.zeros((int(height), int(width), 3))
     # print(scene["spheres"][0]["ks"])
@@ -256,16 +300,76 @@ def main():
             print(f"Current progress: {int(progress):3d}%")
             
         for j, x in enumerate(np.linspace(screen[0], screen[2], int(width))):
+            
+            # image[i, j] = ...
+            # print("progress: %d/%d" % (i + 1, int(height)))
 
             pixel = np.array([x, y, -scene["near"]])
             origin = camera
             direction = normalize(pixel - origin)
 
+            # # check for intersections
+            # nearest_object, min_distance = nearest_intersected_object(scene["spheres"], origin, direction)
+            # if nearest_object is None:
+            #     image[i, j] = np.clip(scene["background_color"], 0, 1)
+            #     continue
+
+            # # compute intersection point between ray and nearest object
+            # intersection = origin + min_distance * direction
+            # normal_to_surface = calculate_normal_at_intersection(nearest_object, intersection)
+            # shifted_point = intersection + 1e-7 * normal_to_surface
+
+            # # RGB + ambient?
+            # illumination = np.array(nearest_object["color"]) * np.array(scene["ambient_intensity"]) * nearest_object["ka"]
+
+            # for light in scene["lights"]:
+            #     # intersection_to_light = normalize(scene["lights"][0]["position"] - shifted_point)
+            #     intersection_to_light = normalize(light["position"] - shifted_point)
+
+            #     _, min_distance = nearest_intersected_object(scene["spheres"], shifted_point, intersection_to_light)
+            #     # intersection_to_light_distance = np.linalg.norm(scene["lights"][0]["position"] - intersection)
+            #     intersection_to_light_distance = np.linalg.norm(light["position"] - intersection)
+            #     is_shadowed = min_distance < intersection_to_light_distance
+
+                # # if is_shadowed:
+                # #     continue
+
+                # if is_shadowed:
+                #     image[i, j] = np.clip(illumination, 0, 1)
+                #     continue
+
+
+
+            #     # # ambient
+            #     # illumination += nearest_object["ka"] * np.array(scene["ambient_intensity"])
+            #     # illumination *= np.array(scene["ambient_intensity"])
+    
+            #     # diffuse
+            #     # illumination += nearest_object["kd"] * np.array(scene["lights"][0]["intensity"]) * np.dot(intersection_to_light, normal_to_surface) * np.array(nearest_object["color"])
+            #     illumination += nearest_object["kd"] * np.array(light["intensity"]) * np.dot(intersection_to_light, normal_to_surface) * np.array(nearest_object["color"])
+            #     # illumination += nearest_object["kd"] * np.dot(intersection_to_light, normal_to_surface)
+            #     # illumination += nearest_object["kd"] * normalize(np.dot(intersection_to_light, normal_to_surface))
+
+            #     # specular
+            #     intersection_to_camera = normalize(camera - intersection)
+            #     H = normalize(intersection_to_light + intersection_to_camera)
+            #     # illumination += nearest_object["ks"] * np.array(scene["lights"][0]["intensity"]) * np.dot(normal_to_surface, H) ** (nearest_object['shininess'])
+            #     # breakpoint()
+            #     test = np.dot(normal_to_surface, H)
+            #     if not nearest_object["ks"] == 0.0:
+            #         # illumination += nearest_object["ks"] * np.array(scene["lights"][0]["intensity"]) * test ** (nearest_object["n"] * 4)
+            #         illumination += nearest_object["ks"] * np.array(light["intensity"]) * test ** (nearest_object["n"] * 4)
+            #     # breakpoint()
+
             illumination = trace_ray(origin, direction, scene["spheres"], scene["lights"], scene["ambient_intensity"], scene["background_colour"], camera, 0)
 
             image[i, j] = np.clip(illumination, 0, 1)
 
+            # print("progress: %d/%d" % (i + 1, int(height)))
+
     print("Current progress: 100%") # remove
+
+    # plt.imsave('RECENT.png', image)
     plt.imsave(scene["output_file_name"], image)
 
     finishTime = time.now()
