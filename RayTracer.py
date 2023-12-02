@@ -24,50 +24,64 @@ def parse_file(file_lines):
 
     for line in file_lines:
         parts = line.strip().split()
-        keyword = parts[0].upper()
+        if len(parts) > 0:
+            keyword = parts[0].upper()
 
-        if keyword in ["NEAR", "LEFT", "RIGHT", "TOP", "BOTTOM"]:
-            scene_data[keyword.lower()] = float(parts[1])
-        elif keyword == "RES":
-            scene_data["resolution"] = (int(parts[1]), int(parts[2]))
-        elif keyword == "SPHERE":
-            # Parsing sphere data
-            name = parts[1]
-            position = tuple(map(float, parts[2:5]))
-            scaling = tuple(map(float, parts[5:8]))
-            color = tuple(map(float, parts[8:11]))
-            ka, kd, ks, kr = map(float, parts[11:15])
-            n = int(parts[15])
-            sphere = {
-                "name": name,
-                "position": position,
-                "scaling": scaling,
-                "color": color,
-                "ka": ka,
-                "kd": kd,
-                "ks": ks,
-                "kr": kr,
-                "n": n
-            }
-            scene_data["spheres"].append(sphere)
-        elif keyword == "LIGHT":
-            # Parsing light source data with corrected format
-            name = parts[1]
-            position = tuple(map(float, parts[2:5]))
-            intensity = tuple(map(float, parts[5:8]))
-            light = {
-                "name": name,
-                "position": position,
-                "intensity": intensity
-            }
-            scene_data["lights"].append(light)
-        elif keyword == "BACK":
-            scene_data["background_colour"] = tuple(map(float, parts[1:]))
-        elif keyword == "AMBIENT":
-            scene_data["ambient_intensity"] = tuple(map(float, parts[1:]))
-        elif keyword == "OUTPUT":
-            # Ensuring output file name is not more than 20 characters
-            scene_data["output_file_name"] = parts[1][:20]
+            if keyword in ["NEAR", "LEFT", "RIGHT", "TOP", "BOTTOM"]:
+                scene_data[keyword.lower()] = float(parts[1])
+            elif keyword == "RES":
+                scene_data["resolution"] = (int(parts[1]), int(parts[2]))
+            elif keyword == "SPHERE":
+                # Parsing sphere data
+                name = parts[1]
+                position = tuple(map(float, parts[2:5]))
+                scaling = tuple(map(float, parts[5:8]))
+                color = tuple(map(float, parts[8:11]))
+                ka, kd, ks, kr = map(float, parts[11:15])
+                n = int(parts[15])
+
+                # Inverse scaling matrix for non-uniform scaling
+                inv_scaling_matrix = np.diag([1/s if s != 0 else 1 for s in scaling] + [1])
+
+                # Transformation matrix for moving the ellipsoid center to the origin
+                translation_matrix = np.identity(4)
+                translation_matrix[:3, 3] = -np.array(position)
+
+                # Combined inverse transformation matrix
+                inv_transform = np.dot(inv_scaling_matrix, translation_matrix)
+
+
+                sphere = {
+                    "name": name,
+                    "position": position,
+                    "scaling": scaling,
+                    "color": color,
+                    "ka": ka,
+                    "kd": kd,
+                    "ks": ks,
+                    "kr": kr,
+                    "n": n,
+                    "trans_matrix" : inv_transform
+                }
+                scene_data["spheres"].append(sphere)
+            elif keyword == "LIGHT":
+                # Parsing light source data with corrected format
+                name = parts[1]
+                position = tuple(map(float, parts[2:5]))
+                intensity = tuple(map(float, parts[5:8]))
+                light = {
+                    "name": name,
+                    "position": position,
+                    "intensity": intensity
+                }
+                scene_data["lights"].append(light)
+            elif keyword == "BACK":
+                scene_data["background_colour"] = tuple(map(float, parts[1:]))
+            elif keyword == "AMBIENT":
+                scene_data["ambient_intensity"] = tuple(map(float, parts[1:]))
+            elif keyword == "OUTPUT":
+                # Ensuring output file name is not more than 20 characters
+                scene_data["output_file_name"] = parts[1][:20]
 
     return scene_data
 
@@ -78,20 +92,20 @@ def normalize(vector):
         return vector  # or you could raise an exception, return None, or handle it another way
     return vector / norm
 
-def ellipsoid_intersect(center, scaling, ray_origin, ray_direction):
+def ellipsoid_intersect(inv_transform, ray_origin, ray_direction):
     # inverse T matrix method
     # Normalize the ray direction
     norm_ray_dir = normalize(ray_direction)
 
     # Inverse scaling matrix for non-uniform scaling
-    inv_scaling_matrix = np.diag([1/s if s != 0 else 1 for s in scaling] + [1])
+    # inv_scaling_matrix = np.diag([1/s if s != 0 else 1 for s in scaling] + [1])
 
-    # Transformation matrix for moving the ellipsoid center to the origin
-    translation_matrix = np.identity(4)
-    translation_matrix[:3, 3] = -np.array(center)
+    # # Transformation matrix for moving the ellipsoid center to the origin
+    # translation_matrix = np.identity(4)
+    # translation_matrix[:3, 3] = -np.array(center)
 
-    # Combined inverse transformation matrix
-    inv_transform = np.dot(inv_scaling_matrix, translation_matrix)
+    # # Combined inverse transformation matrix
+    # inv_transform = np.dot(inv_scaling_matrix, translation_matrix)
 
     # Transform the ray into the object space
     transformed_ray_origin = np.dot(inv_transform, np.append(ray_origin, 1))[:3]
@@ -128,7 +142,7 @@ def ellipsoid_intersect(center, scaling, ray_origin, ray_direction):
 
 def nearest_intersected_object(spheres, ray_origin, ray_direction):
     # distances = [find_intersection(sphr, ray_origin, ray_direction) for sphr in spheres]
-    distances = [ellipsoid_intersect(sphr["position"], sphr["scaling"], ray_origin, ray_direction) for sphr in spheres]
+    distances = [ellipsoid_intersect(sphr["trans_matrix"], ray_origin, ray_direction) for sphr in spheres]
     nearest_object = None
     min_distance = np.inf
     for index, distance in enumerate(distances):
@@ -278,3 +292,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# ------------TEST RESULTS--------------
+# testAmbient         -    57.6  -  PASS
+# testBackground      -  1:32.0  -  PASS *
+# testBehind          -    48.6  -  PASS 
+# testDiffuse         -    58.2  -  PASS 
+# testIllum           -  1:42.4  -  PASS * 
+# testImgPlane        -    27.4  -  PASS 
+# testIntersection    -  1:25.7  -  PASS *
+# testParsing         -  1:08.7  -  PASS 
+# testReflection      -  1:08.5  -  PASS 
+# testSample          -  1:00.8  -  PASS 
+# testShadow          -    57.4  -  PASS - shadow SLIGHTLY off on green sphere
+# testSpecular        -  1:02.9  -  PASS 
