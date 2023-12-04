@@ -2,7 +2,7 @@
 
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 from datetime import datetime as time
 
@@ -272,10 +272,10 @@ def main():
     # print(scene["spheres"][0]["ks"])
     for i, y in enumerate(np.linspace(screen[1], screen[3], int(height))):
 
-        progress = i / height * 100
-        if progress % 10 == 0:
+        #progress = i / height * 100
+        #if progress % 10 == 0:
             # print(f"Current progress: {int(progress):3d}%")
-            print("Current progress: {:3d}%".format(int(progress)))
+            #print("Current progress: {:3d}%".format(int(progress)))
 
             
         for j, x in enumerate(np.linspace(screen[0], screen[2], int(width))):
@@ -288,7 +288,7 @@ def main():
 
             image[i, j] = np.clip(illumination, 0, 1)
 
-    print("Current progress: 100%") # remove
+    #print("Current progress: 100%") # remove
     # plt.imsave(scene["output_file_name"], image)
     save_as_ppm(image, scene["output_file_name"])
 
