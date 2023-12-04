@@ -50,7 +50,6 @@ def parse_file(file_lines):
                 # Combined inverse transformation matrix
                 inv_transform = np.dot(inv_scaling_matrix, translation_matrix)
 
-
                 sphere = {
                     "name": name,
                     "position": position,
@@ -61,7 +60,8 @@ def parse_file(file_lines):
                     "ks": ks,
                     "kr": kr,
                     "n": n,
-                    "trans_matrix" : inv_transform
+                    "trans_matrix" : inv_transform,
+                    "inv_scaling_matrix" : inv_scaling_matrix[:3, :3]
                 }
                 scene_data["spheres"].append(sphere)
             elif keyword == "LIGHT":
@@ -156,9 +156,11 @@ def calculate_normal_at_intersection(sphere, intersection_point):
     # This involves first translating the intersection point by the negative of the sphere's position
     translated_intersection = intersection_point - np.array(sphere["position"])
 
+    inv_scaling_matrix = sphere["inv_scaling_matrix"]
+
     # Then apply the inverse scaling to this point
     # Since normals are direction vectors, we don't translate them, only scale
-    inv_scaling_matrix = np.diag([1/s if s != 0 else 1 for s in sphere["scaling"]])
+    # inv_scaling_matrix = np.diag([1/s if s != 0 else 1 for s in sphere["scaling"]])
     unscaled_normal = normalize(np.dot(inv_scaling_matrix, translated_intersection))
 
     # Transform the normal back to the world space
@@ -272,7 +274,9 @@ def main():
 
         progress = i / height * 100
         if progress % 10 == 0:
-            print(f"Current progress: {int(progress):3d}%")
+            # print(f"Current progress: {int(progress):3d}%")
+            print("Current progress: {:3d}%".format(int(progress)))
+
             
         for j, x in enumerate(np.linspace(screen[0], screen[2], int(width))):
 
@@ -285,10 +289,29 @@ def main():
             image[i, j] = np.clip(illumination, 0, 1)
 
     print("Current progress: 100%") # remove
-    plt.imsave(scene["output_file_name"], image)
+    # plt.imsave(scene["output_file_name"], image)
+    save_as_ppm(image, scene["output_file_name"])
 
     finishTime = time.now()
     print(scene["output_file_name"][:-4] + ": " + str(finishTime - startTime)[3:9])
+
+def save_as_ppm(image_array, filename):
+    height, width, _ = image_array.shape
+    max_val = 255
+
+    with open(filename, 'w') as file:
+        # Write the header
+        file.write("P3\n")
+        file.write("{} {}\n".format(width, height))
+        file.write("{}\n".format(max_val))
+
+        # Write the pixel data
+        for row in image_array:
+            for pixel in row:
+                # Ensure pixel values are integers in the range [0, 255]
+                r, g, b = (int(max(0, min(max_val, val))) for val in pixel * max_val)
+                file.write("{} {} {} ".format(r, g, b))
+            file.write("\n")
 
 if __name__ == "__main__":
     main()
