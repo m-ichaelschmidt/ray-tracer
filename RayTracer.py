@@ -120,7 +120,7 @@ def ellipsoid_intersect(inv_transform, ray_origin, ray_direction):
 
     return None
 
-# find nearest object ray intersects
+# find nearest object(sphere) ray intersects
 def nearest_intersected_object(spheres, ray_origin, ray_direction):
     distances = [ellipsoid_intersect(sphr["trans_matrix"], ray_origin, ray_direction) for sphr in spheres]
     nearest_object = None
@@ -166,23 +166,23 @@ def trace_ray(ray_origin, ray_direction, spheres, lights, ambient_intensity, bac
 
     for light in lights:
         intersection_to_light = normalize(light["position"] - offset_intersection)
-        lightInSphere = False
+        light_in_sphere = False
 
         # check if light is coming from inside sphere
         if np.dot(intersection_to_light, normal_to_surface) < 0:
-            lightInSphere = True
+            light_in_sphere = True
             normal_to_surface = -normal_to_surface  # invert normal
             offset_intersection = intersection + 1e-7 * normal_to_surface # recalculate intersection with new normal
 
         _, min_distance = nearest_intersected_object(spheres, offset_intersection, intersection_to_light)
-        intersection_to_light_distance = np.linalg.norm(light["position"] - intersection)
+        intersection_to_light_distance = np.linalg.norm(light["position"] - offset_intersection)
         is_shadowed = min_distance < intersection_to_light_distance
 
-        if bisected_by_near_plane and not lightInSphere:
+        if bisected_by_near_plane and not light_in_sphere:
             is_shadowed = True
 
         if is_shadowed:
-            if lightInSphere:
+            if light_in_sphere:
                 normal_to_surface = -normal_to_surface
                 offset_intersection = intersection + 1e-7 * normal_to_surface
             continue
@@ -194,13 +194,13 @@ def trace_ray(ray_origin, ray_direction, spheres, lights, ambient_intensity, bac
         if nearest_object["ks"] > 0:
             view_direction = normalize(camera - intersection)
             light_reflect_direction = reflect(-intersection_to_light, normal_to_surface)
-            RdotV = max(0, np.dot(light_reflect_direction, view_direction))
-            specular_intensity = nearest_object["ks"] * np.array(light["intensity"]) * (RdotV ** nearest_object["n"])
+            R_dot_V = max(0, np.dot(light_reflect_direction, view_direction))
+            specular_intensity = nearest_object["ks"] * np.array(light["intensity"]) * (R_dot_V ** nearest_object["n"])
             illumination += specular_intensity
 
         # reset normal if it was inverted
-        if lightInSphere:
-            lightInSphere = False
+        if light_in_sphere:
+            light_in_sphere = False
             normal_to_surface = -normal_to_surface
             offset_intersection = intersection + 1e-7 * normal_to_surface
 
@@ -218,16 +218,16 @@ def reflect(direction, normal):
 def main():
     # ensure correct usage
     if len(sys.argv) < 2:
-        print("Usage: python RayTracer.py <filename>")
+        print("Usage: python RayTracer.py <file_name>")
         sys.exit(1)
 
-    fileName = sys.argv[1]
+    file_name = sys.argv[1]
 
-    with open(fileName, 'r') as file:
-        fileContents = file.readlines()
+    with open(file_name, 'r') as file:
+        file_contents = file.readlines()
     
     # set up scene
-    scene = parse_input(fileContents)
+    scene = parse_input(file_contents)
     width = scene["resolution"][0]
     height = scene["resolution"][1]
     camera = np.array([0, 0, 0])
@@ -248,11 +248,11 @@ def main():
     save_as_ppm(image, scene["output_file_name"])
 
 # uses P3 format
-def save_as_ppm(image_array, filename):
+def save_as_ppm(image_array, file_name):
     height, width, _ = image_array.shape
     max_val = 255
 
-    with open(filename, 'w') as file:
+    with open(file_name, 'w') as file:
         # header
         file.write("P3\n")
         file.write("{} {}\n".format(width, height))
